@@ -22,9 +22,16 @@ class KulRemote:
     @staticmethod
     def get_switch_name(target_swtich):
         child = pexpect.spawn('ssh admin@' + target_swtich, encoding='utf-8', timeout=3)
-        child.expect("password:")
-        child.sendline("kulpass@123")
-        child.expect(">")
+        password = child.expect(["password:", "yes/no"])
+        if password == 0:
+            child.sendline("kulpass@123")
+            child.expect(">")
+        elif password == 1:
+            child.sendline("yes")
+            child.expect("password:")
+            child.sendline("kulpass@123")
+            child.expect(">")
+
         child.sendline("show system name\r")
         child.expect("admin@>*")
         child.expect(">")
@@ -34,9 +41,15 @@ class KulRemote:
     @staticmethod
     def create_vrf(target_swtich, number):
         child = pexpect.spawn('ssh admin@' + target_swtich, encoding='utf-8')
-        child.expect("password:")
-        child.sendline("kulpass@123")
-        child.expect(">")
+        password = child.expect(["password:", "yes/no"])
+        if password == 0:
+            child.sendline("kulpass@123")
+            child.expect(">")
+        elif password == 1:
+            child.sendline("yes")
+            child.expect("password:")
+            child.sendline("kulpass@123")
+            child.expect(">")
         child.sendline("configure")
         child.expect("#")
 
@@ -55,9 +68,15 @@ class KulRemote:
                 step = step + 1
                 print ("change swtich from %s to %s" %(past_switch, new_switch))
                 child = pexpect.spawn('ssh admin@' + new_switch, encoding='utf-8')
-                child.expect("password:")
-                child.sendline("kulpass@123")
-                child.expect(">")
+                password = child.expect(["password:", "yes/no"])
+                if password == 0:
+                    child.sendline("kulpass@123")
+                    child.expect(">")
+                elif password == 1:
+                    child.sendline("yes")
+                    child.expect("password:")
+                    child.sendline("kulpass@123")
+                    child.expect(">")
                 child.sendline("configure")
                 child.expect("#")
                 
@@ -66,9 +85,15 @@ class KulRemote:
     @staticmethod
     def delete_vrf(target_swtich, number):
         child = pexpect.spawn('ssh admin@' + target_swtich, encoding='utf-8')
-        child.expect("password:")
-        child.sendline("kulpass@123")
-        child.expect(">")
+        password = child.expect(["password:", "yes/no"])
+        if password == 0:
+            child.sendline("kulpass@123")
+            child.expect(">")
+        elif password == 1:
+            child.sendline("yes")
+            child.expect("password:")
+            child.sendline("kulpass@123")
+            child.expect(">")
         child.sendline("configure")
         child.expect("#")
         step = 0
@@ -89,9 +114,15 @@ class KulRemote:
                 step = step + 1
                 print ("change swtich from %s to %s" %(past_switch, new_switch))
                 child = pexpect.spawn('ssh admin@' + new_switch, encoding='utf-8')
-                child.expect("password:")
-                child.sendline("kulpass@123")
-                child.expect(">")
+                password = child.expect(["password:", "yes/no"])
+                if password == 0:
+                    child.sendline("kulpass@123")
+                    child.expect(">")
+                elif password == 1:
+                    child.sendline("yes")
+                    child.expect("password:")
+                    child.sendline("kulpass@123")
+                    child.expect(">")
                 child.sendline("configure")
                 child.expect("#")
         child.sendline("commit")
@@ -100,10 +131,15 @@ class KulRemote:
     @staticmethod
     def show_vrf(target_swtich):
         child = pexpect.spawn('ssh admin@' + target_swtich, encoding='utf-8')
-        
-        child.expect("password:")
-        child.sendline("kulpass@123")
-        child.expect(">")
+        password = child.expect(["password:", "yes/no"])
+        if password == 0:
+            child.sendline("kulpass@123")
+            child.expect(">")
+        elif password == 1:
+            child.sendline("yes")
+            child.expect("password:")
+            child.sendline("kulpass@123")
+            child.expect(">")
         child.sendline("show vrf | no-more")
         child.expect("admin@>*")
         child.expect("admin@>*")
