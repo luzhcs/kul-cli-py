@@ -8,7 +8,6 @@ import struct
 def ip2int(addr):
     return struct.unpack("!I", socket.inet_aton(addr))[0]
 
-
 def int2ip(addr):
     return socket.inet_ntoa(struct.pack("!I", addr))
 
@@ -21,10 +20,20 @@ class KulRemote:
         pass
 
     @staticmethod
-    def create_vrf(target_swtich, number):
+    def get_switch_name(target_swtich):
+        child = pexpect.spawn('ssh admin@' + target_swtich, encoding='utf-8', timeout=3)
+        child.expect("password:")
+        child.sendline("kulpass@123")
+        child.expect(">")
+        child.sendline("show system name\r")
+        child.expect("admin@>*")
+        child.expect(">")
 
+        return child.before
+
+    @staticmethod
+    def create_vrf(target_swtich, number):
         child = pexpect.spawn('ssh admin@' + target_swtich, encoding='utf-8')
-        #child.logfile = sys.stdout
         child.expect("password:")
         child.sendline("kulpass@123")
         child.expect(">")
@@ -37,7 +46,7 @@ class KulRemote:
             child.expect("#")
             child.sendline("commit")
             child.expect("#")
-            print ("(%d/%d)" %(i, number-1))
+            print ("(%d/%d)" %(i+1, number))
             tmp = int(i / 128)
             if tmp > step:
                 past_switch = target_swtich
@@ -57,7 +66,6 @@ class KulRemote:
     @staticmethod
     def delete_vrf(target_swtich, number):
         child = pexpect.spawn('ssh admin@' + target_swtich, encoding='utf-8')
-        
         child.expect("password:")
         child.sendline("kulpass@123")
         child.expect(">")
@@ -72,7 +80,7 @@ class KulRemote:
                 child.sendline("commit")
                 child.expect(["#"])
 
-            print ("(%d/%d)" %(i, number-1))
+            print ("(%d/%d)" %(i+1, number))
             tmp = int(i / 128)
             if tmp > step:
                 past_switch = target_swtich
@@ -107,5 +115,5 @@ if __name__ == "__main__":
     #KulRemote.create_vrf('10.1.160.222', 129)
     #KulRemote.show_vrf('10.1.160.222')
 
-    print(ip2int('10.1.160.222'))
-    print(int2ip(ip2int('10.1.160.222')+1))
+    print(KulRemote.get_switch_name('10.1.160.222'))
+    pass
