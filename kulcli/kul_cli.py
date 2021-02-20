@@ -2,19 +2,27 @@ import cmd2
 import sys
 import yaml
 import socket
-from kul_remote import KulRemote
+from kulcli.kul_remote import KulRemote
 
 #'10.1.160.222','10.1.160.223'
 switch_list = []
 def read_yaml(file_path):
-  with open(file_path, "r") as f:
-    return yaml.safe_load(f)
+  try:
+    with open(file_path, "r") as f:
+      return yaml.safe_load(f)
+  except Exception as e:
+    print(e)
+    return {'switch_list': []}
 
 def write_yaml(file_path, d):
-  with open(file_path, 'w') as f:
-    yaml.dump(d, f, default_flow_style=False)
+  try:
+    with open(file_path, 'w') as f:
+      yaml.dump(d, f, default_flow_style=False)
+  except Exception as e:
+    print(e)
+  
 
-conf = read_yaml('setting.yaml')
+conf = read_yaml('/etc/kulcli/setting.yaml')
 switch_list = conf.get('switch_list')
 
 class ConfigApp(cmd2.Cmd):
@@ -31,16 +39,18 @@ class ConfigApp(cmd2.Cmd):
 
   def __init__(self):
     super().__init__()
-    self.prompt = 'kul-app# '
+    self.prompt = 'kulcli# '
     
   @cmd2.with_category(KUL_CONFIG_CAT)
   def do_make_sfc(self, statement):
+    """Make service Function Chain"""
     for arg in statement.arg_list:
       self.poutput(arg)
 
   @cmd2.with_argparser(crud_vrf_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
   def do_create_vrf(self, statement):
+    """Create Vrf for specific Switch"""
     self.poutput("create vrf on switch : " + statement.switch)
     number = statement.number
     if 1 <= number and number <= 512:
@@ -51,6 +61,7 @@ class ConfigApp(cmd2.Cmd):
   @cmd2.with_argparser(crud_vrf_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
   def do_delete_vrf(self, statement):
+    """Delete Vrf for specific Switch"""
     self.poutput("delete vrf on switch : " + statement.switch)
     number = statement.number
     if 1 <= number and number <= 512:
@@ -61,11 +72,17 @@ class ConfigApp(cmd2.Cmd):
   @cmd2.with_argparser(show_vrf_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
   def do_show_vrf(self, statement):
-    vrf_list = KulRemote.show_vrf(statement.switch)
-    self.ppaged(vrf_list)
+    """Show Vrf for specific Switch"""
+    try:
+      vrf_list = KulRemote.show_vrf(statement.switch)
+      self.ppaged(vrf_list)
+    except Exception as e:
+      self.perror(e)
+
   
   @cmd2.with_category(KUL_CONFIG_CAT)
   def do_show_switch(self, statement):
+    """Show Switches"""
     self.poutput("Waiting for Checking Switch Status")
     template = "{0:12}|{1:12}|{2:12}" 
     out = ""
@@ -84,6 +101,7 @@ class ConfigApp(cmd2.Cmd):
   @cmd2.with_argparser(crud_switch_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
   def do_register_switch(self, statement):
+    """Register a Switch"""
     try:
       socket.inet_aton(statement.switch)
       for swi in switch_list:
@@ -91,7 +109,7 @@ class ConfigApp(cmd2.Cmd):
           raise Exception("switch %s is already registered" %(statement.switch))
       switch_list.append(statement.switch)
       conf['switch_list'] = switch_list
-      write_yaml('setting.yaml', conf)
+      write_yaml('/etc/kulcli/setting.yaml', conf)
     except Exception as e:
       self.perror(e)
       
@@ -99,14 +117,18 @@ class ConfigApp(cmd2.Cmd):
   @cmd2.with_argparser(crud_switch_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
   def do_unregister_switch(self, statement):
+    """Unregister a Switch"""
     try:
       socket.inet_aton(statement.switch)
       switch_list.remove(statement.switch)
       conf['switch_list'] = switch_list
-      write_yaml('setting.yaml', conf)
+      write_yaml('/etc/kulcli/setting.yaml', conf)
     except:
       self.perror("no switch %s "%(statement.switch))
 
-if __name__ == "__main__":
+def main():
   app = ConfigApp()
   sys.exit(app.cmdloop())
+
+if __name__ == "__main__":
+  main()

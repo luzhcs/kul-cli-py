@@ -1,0 +1,109 @@
+import pexpect
+import sys
+import time
+import socket
+import struct
+
+
+def ip2int(addr):
+    return struct.unpack("!I", socket.inet_aton(addr))[0]
+
+def int2ip(addr):
+    return socket.inet_ntoa(struct.pack("!I", addr))
+
+def try_login():
+    child = pexpect.spawn('ssh admin@' + target_swtich, encoding='utf-8', timeout=3)
+    password = child.expect(["password:", "yes/no"])
+    if password == 0:
+        child.sendline("kulpass@123")
+        child.expect(">")
+    elif password == 1:
+        child.sendline("yes")
+        child.expect("password:")
+        child.sendline("kulpass@123")
+        child.expect(">")
+    return child
+
+class KulRemote:
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def direct_cmd():
+        pass
+
+    @staticmethod
+    def get_switch_name(target_swtich):
+        child = try_login()
+        child.sendline("show system name\r")
+        child.expect("admin@>*")
+        child.expect(">")
+
+        return child.before
+
+    @staticmethod
+    def create_vrf(target_swtich, number):
+        child = try_login()
+        child.sendline("configure")
+        child.expect("#")
+
+        step = 0
+        for i in range(number):
+            child.sendline("set ip vrf test" + str(i))
+            child.expect("#")
+            child.sendline("commit")
+            child.expect("#")
+            print ("(%d/%d)" %(i+1, number))
+            tmp = int(i / 128)
+            if tmp > step:
+                past_switch = target_swtich
+                new_switch = ip2int(past_switch) + 1
+                new_switch = int2ip(new_switch)
+                step = step + 1
+                print ("change swtich from %s to %s" %(past_switch, new_switch))
+                child = try_login()
+                child.sendline("configure")
+                child.expect("#")
+                
+        
+
+    @staticmethod
+    def delete_vrf(target_swtich, number):
+        child = try_login()
+        child.sendline("configure")
+        child.expect("#")
+        step = 0
+        for i in range(number):
+            child.sendline("delete ip vrf test" + str(i))
+            time.sleep(0.2)
+            expect = child.expect(["syntax error, expecting", "OK"])
+            if expect == 1:
+                child.sendline("commit")
+                child.expect(["#"])
+
+            print ("(%d/%d)" %(i+1, number))
+            tmp = int(i / 128)
+            if tmp > step:
+                past_switch = target_swtich
+                new_switch = ip2int(past_switch) + 1
+                new_switch = int2ip(new_switch)
+                step = step + 1
+                print ("change swtich from %s to %s" %(past_switch, new_switch))
+                child = try_login()
+                child.sendline("configure")
+                child.expect("#")
+        child.sendline("commit")
+        child.expect("#")
+
+    @staticmethod
+    def show_vrf(target_swtich):
+        child = try_login()
+        child.sendline("show vrf | no-more")
+        child.expect("admin@>*")
+        child.expect("admin@>*")
+        return child.before
+        
+
+if __name__ == "__main__":
+    print(KulRemote.get_switch_name('10.1.160.222'))
+    pass
