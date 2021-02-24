@@ -2,7 +2,8 @@ import cmd2
 import sys
 import yaml
 import socket
-from kulcli.kul_remote import KulRemote
+#from kulcli.kul_remote import KulRemote
+from kul_remote import KulRemote
 
 #'10.1.160.222','10.1.160.223'
 switch_list = []
@@ -24,6 +25,8 @@ def write_yaml(file_path, d):
 
 conf = read_yaml('/etc/kulcli/setting.yaml')
 switch_list = conf.get('switch_list')
+vrf_list = conf.get('vrf_static_route')
+#print (vrf_list.keys())
 
 class ConfigApp(cmd2.Cmd):
   KUL_CONFIG_CAT = "Kulcloud Controller Config List"
@@ -37,15 +40,151 @@ class ConfigApp(cmd2.Cmd):
   crud_switch_parser = cmd2.Cmd2ArgumentParser()
   crud_switch_parser.add_argument("switch",  help="target Switch IP for adding")
 
+  create_sfc_parser = cmd2.Cmd2ArgumentParser()
+  create_sfc_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  create_sfc_parser.add_argument("vrf_id",  help="Vrf Id")
+  create_sfc_parser.add_argument("vlan_id", type=int, help="Vlan Id")
+  create_sfc_parser.add_argument("vif_ip",  help="Vif Ip Address")
+  create_sfc_parser.add_argument("prefix",  type=int, help="prefix")
+
+  delete_sfc_parser = cmd2.Cmd2ArgumentParser()
+  delete_sfc_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  delete_sfc_parser.add_argument("vlan_id", type=int, help="Vlan Id")
+
+  add_sfc_gw_parser = cmd2.Cmd2ArgumentParser()
+  add_sfc_gw_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  add_sfc_gw_parser.add_argument("vrf_id",  help="Vrf Id")
+  add_sfc_gw_parser.add_argument("gateway", type=str, help="gateway IP")
+
+  rem_sfc_gw_parser = cmd2.Cmd2ArgumentParser()
+  rem_sfc_gw_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  rem_sfc_gw_parser.add_argument("vrf_id",  help="Vrf Id")
+
+  add_sfc_rc_gw_parser = cmd2.Cmd2ArgumentParser()
+  add_sfc_rc_gw_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  add_sfc_rc_gw_parser.add_argument("vlan_id", type=int, help="Vlan Id")
+  add_sfc_rc_gw_parser.add_argument("vif_ip",  help="Vif Ip Address")
+  add_sfc_rc_gw_parser.add_argument("prefix",  type=int, help="prefix")
+
+  rem_sfc_rc_gw_parser = cmd2.Cmd2ArgumentParser()
+  rem_sfc_rc_gw_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  rem_sfc_rc_gw_parser.add_argument("vlan_id",  help="Vlan Id")
+
+  create_sfc_peer_parser = cmd2.Cmd2ArgumentParser()
+  create_sfc_peer_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  create_sfc_peer_parser.add_argument("target_vrf_1", choices=vrf_list.keys(), help="first target vrf_name")
+  create_sfc_peer_parser.add_argument("target_vrf_2", choices=vrf_list.keys(), help="second target vrf_name")
+
+  delete_sfc_peer_parser = cmd2.Cmd2ArgumentParser()
+  delete_sfc_peer_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  delete_sfc_peer_parser.add_argument("target_vrf_1", choices=vrf_list.keys(), help="first target vrf_name")
+  delete_sfc_peer_parser.add_argument("target_vrf_2", choices=vrf_list.keys(), help="second target vrf_name")
+
   def __init__(self):
     super().__init__()
     self.prompt = 'kulcli# '
-    
+
+  @cmd2.with_argparser(create_sfc_peer_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
-  def do_make_sfc(self, statement):
+  def do_create_sfc_peer(self, statement):
+    """Create Service Function Chain Peer"""
+    try:
+      KulRemote.create_sfc_peer(
+        statement.switch, 
+        vrf_list[statement.target_vrf_1]['route'],
+        vrf_list[statement.target_vrf_1]['next_hop'],
+        vrf_list[statement.target_vrf_2]['route'],
+        vrf_list[statement.target_vrf_2]['next_hop'],
+      )
+    except Exception as e:
+      self.perror(e)
+
+  @cmd2.with_argparser(delete_sfc_peer_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_delete_sfc_peer(self, statement):
+    """Delete Service Function Chain Peer"""
+    try:
+      KulRemote.delete_sfc_peer(
+        statement.switch, 
+        vrf_list[statement.target_vrf_1]['route'],
+        vrf_list[statement.target_vrf_2]['route'],
+      )
+    except Exception as e:
+      self.perror(e)
+
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_show_sfc_peer(self, statement):
+    """Add Service Function Chain Recieve gateway"""
+    try:
+      self.poutput(vrf_list)
+    except Exception as e:
+      self.perror(e)
+
+  @cmd2.with_argparser(add_sfc_rc_gw_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_add_sfc_receive_gateway(self, statement):
+    """Add Service Function Chain Recieve gateway"""
+    try:
+      KulRemote.add_sfc_receive_gateway(
+        statement.switch, 
+        statement.vlan_id, 
+        statement.vif_ip, 
+        statement.prefix
+      )
+    except Exception as e:
+      self.perror(e)
+  
+  @cmd2.with_argparser(rem_sfc_rc_gw_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_remove_sfc_receive_gateway(self, statement):
+    """Remove Service Function Chain Recieve gateway"""
+    try:
+      KulRemote.remove_sfc_receive_gateway(statement.switch, statement.vlan_id)
+    except Exception as e:
+      self.perror(e)
+
+  @cmd2.with_argparser(add_sfc_gw_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_add_sfc_gateway(self, statement):
+    """Add Service Function Chain gateway"""
+    try:
+      KulRemote.add_sfc_gateway(statement.switch, statement.vrf_id, statement.gateway)
+    except Exception as e:
+      self.perror(e)
+  
+  @cmd2.with_argparser(rem_sfc_gw_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_remove_sfc_gateway(self, statement):
+    """Remove Service Function Chain gateway"""
+    try:
+      KulRemote.remove_sfc_gateway(statement.switch, statement.vrf_id)
+    except Exception as e:
+      self.perror(e)
+    
+  @cmd2.with_argparser(create_sfc_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_create_sfc(self, statement):
     """Make service Function Chain"""
-    for arg in statement.arg_list:
-      self.poutput(arg)
+    try:
+      print ("%s %s" %(statement.switch, statement.vrf_id))
+      KulRemote.create_sfc(
+        statement.switch, 
+        statement.vrf_id, 
+        statement.vlan_id, 
+        statement.vif_ip, 
+        statement.prefix
+      )
+    except Exception as e:
+      self.perror(e)
+  
+  @cmd2.with_argparser(delete_sfc_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_delete_sfc(self, statement):
+    """Make service Function Chain"""
+    try:
+      KulRemote.delete_sfc(statement.switch, statement.vlan_id)
+    except Exception as e:
+      self.perror(e)
 
   @cmd2.with_argparser(crud_vrf_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
