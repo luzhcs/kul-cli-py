@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="kulcli", # Replace with your own username
-    version="0.0.1",
+    version="0.0.5",
     author="Jihwan Yuk",
     author_email="luzhcs@kulcloud.net",
     description="Python based Kulcloud CLI",

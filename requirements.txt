@@ -4,8 +4,13 @@ colorama==0.4.4
 conf==0.4.1
 gnureadline==8.0.0
 pexpect==4.8.0
+ply==3.11
 ptyprocess==0.7.0
+pyasn1==0.4.8
+pycryptodomex==3.10.1
 pyperclip==1.8.1
+pysmi==0.3.4
+pysnmp==4.4.12
 PyYAML==5.4.1
 six==1.15.0
 wcwidth==0.2.5

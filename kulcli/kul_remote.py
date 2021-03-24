@@ -11,17 +11,17 @@ def ip2int(addr):
 def int2ip(addr):
     return socket.inet_ntoa(struct.pack("!I", addr))
 
-def try_login(target_swtich):
+def try_login(target_switch):
     #print("Try login")
-    child = pexpect.spawn('ssh admin@' + target_swtich, encoding='utf-8', timeout=3)
+    child = pexpect.spawn('ssh -p 2203 admin@' + target_switch, encoding='utf-8', timeout=3)
     password = child.expect(["password:", "yes/no"])
     if password == 0:
-        child.sendline("kulpass@123")
+        child.sendline("Ismart123!")
         child.expect(">")
     elif password == 1:
         child.sendline("yes")
         child.expect("password:")
-        child.sendline("kulpass@123")
+        child.sendline("Ismart123!")
         child.expect(">")
     return child
 
@@ -30,8 +30,64 @@ class KulRemote:
         pass
 
     @staticmethod
-    def direct_cmd():
-        pass
+    def scp_cmd(target_switch: str, file_name: str):
+        cmd = 'scp -P 2203 ' + '/etc/kulcli/' + file_name + ' admin@' + target_switch + ":~"
+        child = pexpect.spawn(cmd)
+        i = child.expect(["password:", pexpect.EOF])
+        if i==0: # send password                
+            child.sendline("Ismart123!")
+            child.expect(pexpect.EOF)
+        elif i==1: 
+            print ("Got the key or connection timeout")
+            pass
+        child = try_login(target_switch)
+        #child.logfile = sys.stdout
+        child.sendline("configure")
+        child.expect("#")
+        child.sendline("load override " + file_name)
+        child.expect("#")
+        child.sendline("commit")
+        child.expect("#")
+        ex = child.expect(["Commit OK", "Commit failed"])
+        if ex == 1:
+            raise Exception("commit failed")
+        else:
+            print("Commit Complete.")
+
+    @staticmethod
+    def get_cmd(target_switch: str, file_name: str):
+        child = try_login(target_switch)
+        #child.logfile = sys.stdout
+        child.sendline("configure")
+        child.expect("#")
+        cmd = "show all | no-more"
+        child.sendline(cmd)
+        child.expect("no-more")
+        child.expect("admin@")
+        conf = child.before
+        #conf = child.before.replace('^M','')
+        return conf
+
+
+    @staticmethod
+    def direct_cmd(target_switch: str, cmd: str, commitable: bool):
+        child = try_login(target_switch)
+        child.sendline("configure")
+        #child.logfile = sys.stdout
+        child.expect("#")
+        child.sendline(cmd)
+        child.expect(".*@*#")
+        child.expect("admin@")
+        if commitable == True:
+            child.sendline("commit")
+            child.expect("#")
+            ex = child.expect(["Commit OK", "Commit failed"])
+            if ex == 1:
+                raise Exception("commit failed")
+            else:
+                print("Commit Complete.")
+        else:
+            print(child.before)
 
     @staticmethod
     def create_sfc_peer(
@@ -169,6 +225,7 @@ class KulRemote:
     @staticmethod
     def create_sfc(target_switch: str, vrf_id: str, vlan_id: int, vif_ip: str, prefix: int):
         child = try_login(target_switch)
+        child.logfile = sys.stdout
         child.sendline("configure")
         child.expect("#")
         cmd = "set vlans vlan-id %s l3-interface \"vlan%s\"" %(str(vlan_id), str(vlan_id) )
@@ -213,7 +270,7 @@ class KulRemote:
             print("Deleted.")
 
     @staticmethod
-    def get_switch_name(target_swtich):
+    def get_switch_name(target_switch):
         child = try_login(target_switch)
         child.sendline("show system name\r")
         child.expect("admin@>*")
@@ -222,7 +279,7 @@ class KulRemote:
         return child.before
 
     @staticmethod
-    def create_vrf(target_swtich, number):
+    def create_vrf(target_switch, number):
         child = try_login(target_switch)
         child.sendline("configure")
         child.expect("#")
@@ -233,27 +290,28 @@ class KulRemote:
             child.expect("#")
             child.sendline("commit")
             child.expect("#")
+            time.sleep(0.5)
             print ("(%d/%d)" %(i+1, number))
             tmp = int(i / 128)
             if tmp > step:
-                past_switch = target_swtich
-                new_switch = ip2int(past_switch) + 1
-                new_switch = int2ip(new_switch)
+                past_switch = target_switch
+                target_switch = ip2int(past_switch) + 1
+                target_switch = int2ip(target_switch)
                 step = step + 1
-                print ("change swtich from %s to %s" %(past_switch, new_switch))
-                child = try_login()
+                print ("change swtich from %s to %s" %(past_switch, target_switch))
+                child = try_login(target_switch)
                 child.sendline("configure")
                 child.expect("#")
                 
     @staticmethod
-    def delete_vrf(target_swtich, number):
+    def delete_vrf(target_switch, number):
         child = try_login(target_switch)
         child.sendline("configure")
         child.expect("#")
         step = 0
         for i in range(number):
             child.sendline("delete ip vrf test" + str(i))
-            time.sleep(0.2)
+            time.sleep(0.5)
             expect = child.expect(["syntax error, expecting", "OK"])
             if expect == 1:
                 child.sendline("commit")
@@ -263,22 +321,22 @@ class KulRemote:
             tmp = int(i / 128)
             if tmp > step:
                 past_switch = target_switch
-                new_switch = ip2int(past_switch) + 1
-                new_switch = int2ip(new_switch)
+                target_switch = ip2int(past_switch) + 1
+                target_switch = int2ip(target_switch)
                 step = step + 1
-                print ("change swtich from %s to %s" %(past_switch, new_switch))
-                child = try_login()
+                print ("change swtich from %s to %s" %(past_switch, target_switch))
+                child = try_login(target_switch)
                 child.sendline("configure")
                 child.expect("#")
         child.sendline("commit")
         child.expect("#")
 
     @staticmethod
-    def show_vrf(target_swtich):
+    def show_vrf(target_switch):
         child = try_login(target_switch)
         child.sendline("show vrf | no-more")
-        child.expect("admin@>*")
-        child.expect("admin@>*")
+        child.expect(".*@*>")
+        child.expect("admin@")
         return child.before
         
 

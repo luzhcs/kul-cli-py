@@ -2,8 +2,28 @@ import cmd2
 import sys
 import yaml
 import socket
-#from kulcli.kul_remote import KulRemote
-from kul_remote import KulRemote
+import logging
+import importlib
+import os
+import copy
+from logging import handlers
+
+if importlib.util.find_spec("kulcli"):
+  from kulcli.kul_remote import KulRemote
+  from kulcli.kul_snmp_trap import KulSnmpTrapReceiver
+else:
+  from kul_remote import KulRemote
+  from kul_snmp_trap import KulSnmpTrapReceiver
+
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+logHandler = handlers.TimedRotatingFileHandler(filename='/var/log/kulcli.log',
+                                               backupCount=35, when='midnight', interval=1, encoding='utf-8')
+logHandler.setFormatter(formatter)
+logHandler.suffix = "%Y%m%d"
+
+logger = logging.getLogger('main')
+logger.setLevel(logging.INFO)
+logger.addHandler(logHandler)
 
 #'10.1.160.222','10.1.160.223'
 switch_list = []
@@ -25,8 +45,12 @@ def write_yaml(file_path, d):
 
 conf = read_yaml('/etc/kulcli/setting.yaml')
 switch_list = conf.get('switch_list')
+if switch_list == None:
+  switch_list = []
 vrf_list = conf.get('vrf_static_route')
-#print (vrf_list.keys())
+file_list =[ x.split('/')[-1] for x in os.listdir('/etc/kulcli')]
+kstr = KulSnmpTrapReceiver()
+kstr.start()
 
 class ConfigApp(cmd2.Cmd):
   KUL_CONFIG_CAT = "Kulcloud Controller Config List"
@@ -37,8 +61,11 @@ class ConfigApp(cmd2.Cmd):
   show_vrf_parser = cmd2.Cmd2ArgumentParser()
   show_vrf_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
 
-  crud_switch_parser = cmd2.Cmd2ArgumentParser()
-  crud_switch_parser.add_argument("switch",  help="target Switch IP for adding")
+  reg_switch_parser = cmd2.Cmd2ArgumentParser()
+  reg_switch_parser.add_argument("switch",  help="target Switch IP for adding")
+
+  unreg_switch_parser = cmd2.Cmd2ArgumentParser()
+  unreg_switch_parser.add_argument("switch", choices=switch_list,  help="target Switch IP for deleting")
 
   create_sfc_parser = cmd2.Cmd2ArgumentParser()
   create_sfc_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
@@ -80,9 +107,91 @@ class ConfigApp(cmd2.Cmd):
   delete_sfc_peer_parser.add_argument("target_vrf_1", choices=vrf_list.keys(), help="first target vrf_name")
   delete_sfc_peer_parser.add_argument("target_vrf_2", choices=vrf_list.keys(), help="second target vrf_name")
 
+  enable_link_alarm_parser = cmd2.Cmd2ArgumentParser()
+  enable_link_alarm_parser.add_argument("setting", choices=["enable", "disable"], help="snmp output")
+
+  fowarding_cmd_parser = cmd2.Cmd2ArgumentParser()
+  fowarding_cmd_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  fowarding_cmd_parser.add_argument("cmd", help="cmds args")
+  fowarding_cmd_parser.add_argument("commitable", choices=["enable", "disable"], help="commit cmd or not")
+
+  scp_cmd_parser = cmd2.Cmd2ArgumentParser()
+  scp_cmd_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  scp_cmd_parser.add_argument("file_name", choices=file_list, help="file name")
+
+  get_cmd_parser = cmd2.Cmd2ArgumentParser()
+  get_cmd_parser.add_argument("switch", choices=switch_list, help="target Switch IP")
+  get_cmd_parser.add_argument("file_name", help="file name")
+
   def __init__(self):
     super().__init__()
     self.prompt = 'kulcli# '
+
+  @cmd2.with_argparser(scp_cmd_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_send_conf(self, statement):
+    """Send Config file to Switch"""
+    try:
+      KulRemote.scp_cmd(statement.switch, statement.file_name)
+    except Exception as e:
+      self.perror(e)
+  
+  @cmd2.with_argparser(get_cmd_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_get_conf(self, statement):
+    """Get Config file to Switch"""
+    try:
+      filename = statement.file_name
+      conf = KulRemote.get_cmd(statement.switch, filename)
+      if not os.path.exists("/etc/kulcli/" + filename):
+        self.poutput("Saving Conf file .. ")
+        f = open("/etc/kulcli/" + filename, 'w')
+        f.write(conf.replace("\r", "")) 
+        f.close()
+        del file_list[:]
+        for x in os.listdir('/etc/kulcli'):
+          file_list.append(x.split('/')[-1]) 
+      else:
+        raise Exception("File already exist, please change file name and retry it")
+    except Exception as e:
+      self.perror(e)
+
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_show_conf_list(self, statement):
+    try:
+      del file_list[:]
+      for x in os.listdir('/etc/kulcli'):
+        file_list.append(x.split('/')[-1]) 
+      for f in file_list:
+        self.poutput(f)
+    except Exception as e:
+      self.perror(e)
+
+
+  @cmd2.with_argparser(fowarding_cmd_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_forwarding_cmd(self, statement):
+    """Simple forwarding CMD"""
+    try:
+      commitable = True if statement.commitable == 'enable' else False
+      KulRemote.direct_cmd(statement.switch, statement.cmd, commitable)
+    except Exception as e:
+      self.perror(e)
+  
+  @cmd2.with_argparser(enable_link_alarm_parser)
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_link_alarm(self, statement):
+    """Enable SNMP Trap Output"""
+    if statement.setting == "enable":
+      kstr.snmp_enable()
+    else:
+      kstr.snmp_disable()
+  
+  @cmd2.with_category(KUL_CONFIG_CAT)
+  def do_show_link_alarm(self, statement):
+    """Show SNMP Trap Output Setting"""
+    output = 'enabled' if kstr.enable else 'disabled'
+    self.poutput(output)
 
   @cmd2.with_argparser(create_sfc_peer_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
@@ -237,7 +346,7 @@ class ConfigApp(cmd2.Cmd):
     out += "================================" + "\n"
     self.poutput(out)
 
-  @cmd2.with_argparser(crud_switch_parser)
+  @cmd2.with_argparser(reg_switch_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
   def do_register_switch(self, statement):
     """Register a Switch"""
@@ -253,7 +362,7 @@ class ConfigApp(cmd2.Cmd):
       self.perror(e)
       
 
-  @cmd2.with_argparser(crud_switch_parser)
+  @cmd2.with_argparser(unreg_switch_parser)
   @cmd2.with_category(KUL_CONFIG_CAT)
   def do_unregister_switch(self, statement):
     """Unregister a Switch"""
@@ -267,7 +376,11 @@ class ConfigApp(cmd2.Cmd):
 
 def main():
   app = ConfigApp()
-  sys.exit(app.cmdloop())
+  try:
+    ret = app.cmdloop()
+    kstr.stop()
+  except KeyboardInterrupt:
+    sys.exit()
 
 if __name__ == "__main__":
   main()
