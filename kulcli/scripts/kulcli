@@ -1,0 +1,5 @@
+#!/usr/bin/env python
+
+import kulcli.kul_cli
+
+kulcli.kul_cli.main()
